@@ -1,0 +1,105 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   NFT PROJECT - COMPLETE FILE MAP                           ║
+║                        All Files & Their Purpose                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📍 START HERE
+═════════════════════════════════════════════════════════════════════════════════
+  📄 00_START_HERE.md               ← READ THIS FIRST (setup summary)
+  📄 INDEX.md                        Navigation guide for all docs
+  📄 QUICK_START.md                 60-second quick start
+
+
+🚀 APPLICATION
+═════════════════════════════════════════════════════════════════════════════════
+  📄 app.py                         Main Streamlit application (700+ lines)
+  📄 requirements.txt               Python dependencies (4 core packages)
+  🔧 run.sh                         Quick start script (bash)
+  📄 .gitignore                     Git ignore configuration
+
+
+📚 DOCUMENTATION (Complete Context)
+═════════════════════════════════════════════════════════════════════════════════
+  📖 README.md                      User guide & features overview
+  🤖 PROJECT_CONTEXT.md            **MOST IMPORTANT FOR AI AGENTS**
+                                   Complete project context (17 KB)
+                                   • Data architecture
+                                   • All function locations
+                                   • Tab breakdowns
+                                   • Extension points
+  🏗️  ARCHITECTURE.md               Technical architecture & design
+  🔧 SETUP.md                       Detailed installation & troubleshooting
+
+
+💾 DATA
+═════════════════════════════════════════════════════════════════════════════════
+  📂 data/
+     ├─ Level3_bayc_new.csv         Transaction records
+     ├─ Level3_cryptopunks_new.csv
+     ├─ Level3_doodles_new.csv
+     ├─ Level3_mayc_new.csv
+     ├─ Level3_pudgy_penguins_new.csv
+     ├─ Level4_bayc_new.csv         Aggregated statistics
+     ├─ Level4_cryptopunks_new.csv
+     ├─ Level4_doodles_new.csv
+     ├─ Level4_mayc_new.csv
+     └─ Level4_pudgypenguins_new.csv
+
+
+⚙️  ENVIRONMENT
+═════════════════════════════════════════════════════════════════════════════════
+  📁 .venv/                         Python virtual environment
+     ├─ bin/python                  Python 3.14.3 interpreter
+     ├─ lib/python3.14/            All 44+ installed packages
+     └─ ...                         (streamlit, pandas, plotly, numpy, etc)
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+📖 DOCUMENTATION GUIDE
+═════════════════════════════════════════════════════════════════════════════════
+
+For Users:
+  1. 00_START_HERE.md (this overview)
+  2. QUICK_START.md (60 seconds)
+  3. README.md (features)
+  4. Try the app!
+
+For Developers:
+  1. 00_START_HERE.md
+  2. SETUP.md (environment)
+  3. PROJECT_CONTEXT.md (code structure)
+  4. ARCHITECTURE.md (technical details)
+
+For AI Agents:
+  1. Read: PROJECT_CONTEXT.md (MOST IMPORTANT)
+  2. Read: ARCHITECTURE.md
+  3. Reference: Others as needed
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+🚀 QUICK START
+═════════════════════════════════════════════════════════════════════════════════
+
+  cd /Users/mahesh/github/NFT-project
+  source .venv/bin/activate
+  streamlit run app.py
+
+Then open: http://localhost:8501
+
+
+✅ STATUS
+═════════════════════════════════════════════════════════════════════════════════
+
+  ✓ Virtual environment created & activated
+  ✓ All dependencies installed (44 packages)
+  ✓ Data files present (10 CSV files)
+  ✓ Application code complete
+  ✓ Documentation comprehensive
+  ✓ Ready to run!
+
+
+═════════════════════════════════════════════════════════════════════════════════
+Last Updated: April 18, 2026 | Python 3.14.3 | Status: 🟢 READY
+═════════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,87 @@
+# Render.com Deployment Configuration
+# https://render.com/docs/infrastructure-as-code
+
+services:
+  # Main NFT Market Analytics API Service
+  - type: web
+    name: nft-market-analytics-api
+    runtime: docker
+    
+    # Git repository configuration
+    repo: https://github.com/YOUR_USERNAME/NFT-project
+    branch: main
+    dockerfilePath: ./Dockerfile
+    
+    # Resource allocation
+    plan: free  # Options: free, starter, standard, pro
+    
+    # Environment variables
+    envVars:
+      # ─────────────────────────────────────────────────────────────────────
+      # API KEYS (IMPORTANT: Set these in Render dashboard, not in this file)
+      # ─────────────────────────────────────────────────────────────────────
+      - key: API_KEY_APP1
+        value: ${API_KEY_APP1}
+      
+      - key: API_KEY_APP2
+        value: ${API_KEY_APP2}
+      
+      # ─────────────────────────────────────────────────────────────────────
+      # Server configuration
+      # ─────────────────────────────────────────────────────────────────────
+      - key: ENV
+        value: production
+      
+      - key: PORT
+        value: 8000
+      
+      - key: DATA_PATH
+        value: data
+    
+    # Build configuration
+    buildCommand: pip install -r requirements_api.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port 8000
+    
+    # Auto-deploy on push to main
+    autoDeploy: true
+    
+    # Health check endpoint
+    healthCheckPath: /api/health
+    
+    # Logging
+    disk:
+      name: nft-data
+      mountPath: /app/data
+      sizeGB: 5
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPLOYMENT INSTRUCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# 1. Connect GitHub repository to Render:
+#    - Go to https://dashboard.render.com
+#    - Click "New +" → "Web Service"
+#    - Connect GitHub repository
+#    - Select "Docker" as runtime
+#
+# 2. Set environment variables in Render dashboard:
+#    - API_KEY_APP1: Your first mobile app's API key
+#    - API_KEY_APP2: Your second mobile app's API key
+#    - Do NOT commit keys to git!
+#
+# 3. Configure disk storage for data files:
+#    - Attach persistent disk (5GB recommended)
+#    - Mount at /app/data
+#    - Upload CSV files to disk
+#
+# 4. Deploy:
+#    - Render automatically builds and deploys on push to main
+#    - Or manually trigger deployment from dashboard
+#
+# 5. Access API:
+#    - Dashboard URL: https://nft-market-analytics-api.onrender.com
+#    - API Docs: https://nft-market-analytics-api.onrender.com/api/docs
+#    - Make requests with X-API-Key header
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
