@@ -6,18 +6,22 @@ FROM python:3.14-slim AS builder
 # Set working directory
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies for pandas compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY requirements_api.txt .
+COPY requirements_api.txt requirements_docker.txt ./
 
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r requirements_api.txt
+# Upgrade pip, setuptools, and wheel first for better compatibility
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Install requirements with binary preference
+RUN pip install --no-cache-dir --prefer-binary -r requirements_api.txt
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
