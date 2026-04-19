@@ -22,6 +22,17 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import os
+import re
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+try:
+  from dotenv import load_dotenv
+  load_dotenv()
+except Exception:
+  # Dashboard still works when python-dotenv is not installed.
+  pass
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -42,6 +53,19 @@ TICK    = "#666666"
 GRID    = "rgba(255,255,255,0.07)"
 TEXT    = "#e0e0e0"
 SUBTEXT = "#999999"
+
+CSV_URL_ENV_MAP = {
+  "Level3_cryptopunks_new.csv": "DATA_URL_LEVEL3_CRYPTOPUNKS",
+  "Level3_bayc_new.csv": "DATA_URL_LEVEL3_BAYC",
+  "Level3_mayc_new.csv": "DATA_URL_LEVEL3_MAYC",
+  "Level3_doodles_new.csv": "DATA_URL_LEVEL3_DOODLES",
+  "Level3_pudgy_penguins_new.csv": "DATA_URL_LEVEL3_PUDGY_PENGUINS",
+  "Level4_cryptopunks_new.csv": "DATA_URL_LEVEL4_CRYPTOPUNKS",
+  "Level4_bayc_new.csv": "DATA_URL_LEVEL4_BAYC",
+  "Level4_mayc_new.csv": "DATA_URL_LEVEL4_MAYC",
+  "Level4_doodles_new.csv": "DATA_URL_LEVEL4_DOODLES",
+  "Level4_pudgypenguins_new.csv": "DATA_URL_LEVEL4_PUDGYPENGUINS",
+}
 
 # ── Global CSS ─────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -185,51 +209,170 @@ st.markdown(f"""
 
 
 # ── Load & derive all data from real CSVs ─────────────────────────────────────
+def _gdrive_to_direct_download(url: str) -> str:
+  """Convert common Google Drive share links to a direct-download URL."""
+  if not url:
+    return url
+
+  if "drive.google.com" not in url:
+    return url
+
+  parsed = urlparse(url)
+  qs = parse_qs(parsed.query)
+  file_id = None
+
+  if "id" in qs and qs["id"]:
+    file_id = qs["id"][0]
+  else:
+    match = re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
+    if match:
+      file_id = match.group(1)
+
+  if not file_id:
+    return url
+
+  return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+
+def _resolve_csv_source(base: Path, filename: str):
+  local_path = base / filename
+  if local_path.exists():
+    return str(local_path), "local"
+
+  env_key = CSV_URL_ENV_MAP.get(filename, "")
+  raw_url = os.getenv(env_key, "").strip() if env_key else ""
+  if not raw_url:
+    raise FileNotFoundError(filename)
+
+  return _gdrive_to_direct_download(raw_url), f"env:{env_key}"
+
+
 @st.cache_data
 def load_data():
-    # ── Level 3: individual sale / event rows ──────────────────────────────
-    cp1      = pd.read_csv(r"data/Level3_cryptopunks_new.csv")
-    bayc1    = pd.read_csv(r"data/Level3_bayc_new.csv")
-    mayc1    = pd.read_csv(r"data/Level3_mayc_new.csv")
-    doodles1 = pd.read_csv(r"data/Level3_doodles_new.csv")
-    pp1      = pd.read_csv(r"data/Level3_pudgy_penguins_new.csv")
+  base = Path("data")
 
-    cp1["collection"]      = "CryptoPunks"
-    bayc1["collection"]    = "BAYC"
-    mayc1["collection"]    = "MAYC"
-    doodles1["collection"] = "Doodles"
-    pp1["collection"]      = "Pudgy Penguins"
+  lvl3_files = [
+    ("Level3_cryptopunks_new.csv", "CryptoPunks"),
+    ("Level3_bayc_new.csv", "BAYC"),
+    ("Level3_mayc_new.csv", "MAYC"),
+    ("Level3_doodles_new.csv", "Doodles"),
+    ("Level3_pudgy_penguins_new.csv", "Pudgy Penguins"),
+  ]
+  lvl4_files = [
+    ("Level4_cryptopunks_new.csv", "CryptoPunks"),
+    ("Level4_bayc_new.csv", "BAYC"),
+    ("Level4_mayc_new.csv", "MAYC"),
+    ("Level4_doodles_new.csv", "Doodles"),
+    ("Level4_pudgypenguins_new.csv", "Pudgy Penguins"),
+  ]
 
-    sales_df = pd.concat([cp1, bayc1, mayc1, doodles1, pp1], ignore_index=True)
+  missing = []
+  data_load_errors = []
+  lvl3_dfs = []
+  lvl4_dfs = []
 
-    # ── Level 4: per-NFT aggregated stats ──────────────────────────────────
-    cp2      = pd.read_csv(r"data/Level4_cryptopunks_new.csv")
-    bayc2    = pd.read_csv(r"data/Level4_bayc_new.csv")
-    mayc2    = pd.read_csv(r"data/Level4_mayc_new.csv")
-    doodles2 = pd.read_csv(r"data/Level4_doodles_new.csv")
-    pp2      = pd.read_csv(r"data/Level4_pudgypenguins_new.csv")
+  for filename, collection in lvl3_files:
+    source_name = "unknown"
+    try:
+      source, source_name = _resolve_csv_source(base, filename)
+      df = pd.read_csv(source)
+      df["collection"] = collection
+      lvl3_dfs.append(df)
+    except FileNotFoundError:
+      missing.append(filename)
+    except Exception as exc:
+      data_load_errors.append(f"{filename} ({source_name}): {exc}")
 
-    cp2["collection"]      = "CryptoPunks"
-    bayc2["collection"]    = "BAYC"
-    mayc2["collection"]    = "MAYC"
-    doodles2["collection"] = "Doodles"
-    pp2["collection"]      = "Pudgy Penguins"
+  for filename, collection in lvl4_files:
+    source_name = "unknown"
+    try:
+      source, source_name = _resolve_csv_source(base, filename)
+      df = pd.read_csv(source)
+      df["collection"] = collection
+      lvl4_dfs.append(df)
+    except FileNotFoundError:
+      missing.append(filename)
+    except Exception as exc:
+      data_load_errors.append(f"{filename} ({source_name}): {exc}")
 
-    agg_df = pd.concat([cp2, bayc2, mayc2, doodles2, pp2], ignore_index=True)
+  # If required CSVs are unavailable, provide deterministic demo data so the UI still runs.
+  if missing or data_load_errors:
+    sales_rows = [
+      ("CryptoPunks", 1001, "sale", 72.5, "2025-11-15"),
+      ("CryptoPunks", 1001, "transfer", 0.0, "2026-01-10"),
+      ("CryptoPunks", 1002, "mint", 1.2, "2025-08-12"),
+      ("BAYC", 210, "sale", 28.4, "2025-10-08"),
+      ("BAYC", 211, "sale", 32.7, "2025-12-18"),
+      ("BAYC", 211, "transfer", 0.0, "2026-02-01"),
+      ("MAYC", 5021, "sale", 9.9, "2025-09-22"),
+      ("MAYC", 5021, "transfer", 0.0, "2025-11-10"),
+      ("MAYC", 5022, "mint", 0.8, "2025-06-03"),
+      ("Doodles", 782, "sale", 6.4, "2025-07-14"),
+      ("Doodles", 783, "sale", 7.1, "2026-01-20"),
+      ("Doodles", 783, "transfer", 0.0, "2026-03-01"),
+      ("Pudgy Penguins", 9901, "sale", 12.3, "2025-08-30"),
+      ("Pudgy Penguins", 9902, "sale", 11.8, "2025-12-02"),
+      ("Pudgy Penguins", 9902, "mint", 0.9, "2025-05-19"),
+    ]
+    sales_df = pd.DataFrame(
+      sales_rows,
+      columns=["collection", "identifier", "event_type", "price_eth", "timestamp"],
+    )
 
-    # ── Clean types ─────────────────────────────────────────────────────────
-    sales_df["price_eth"] = pd.to_numeric(sales_df["price_eth"], errors="coerce")
-    sales_df["timestamp"] = pd.to_datetime(sales_df["timestamp"],  errors="coerce")
+    agg_rows = [
+      ("CryptoPunks", 1001, 145.0, 72.5, 72.5, 72.5, 2),
+      ("CryptoPunks", 1002, 1.2, 1.2, 1.2, 1.2, 1),
+      ("BAYC", 210, 28.4, 28.4, 28.4, 28.4, 1),
+      ("BAYC", 211, 65.4, 32.7, 32.7, 32.7, 2),
+      ("MAYC", 5021, 9.9, 9.9, 9.9, 9.9, 2),
+      ("MAYC", 5022, 0.8, 0.8, 0.8, 0.8, 1),
+      ("Doodles", 782, 6.4, 6.4, 6.4, 6.4, 1),
+      ("Doodles", 783, 14.2, 7.1, 7.1, 7.1, 2),
+      ("Pudgy Penguins", 9901, 12.3, 12.3, 12.3, 12.3, 1),
+      ("Pudgy Penguins", 9902, 12.7, 6.35, 11.8, 0.9, 2),
+    ]
+    agg_df = pd.DataFrame(
+      agg_rows,
+      columns=[
+        "collection",
+        "identifier",
+        "total_volume_eth",
+        "avg_price_eth",
+        "max_price_eth",
+        "min_price_eth",
+        "transaction_count",
+      ],
+    )
+    using_demo_data = True
+  else:
+    sales_df = pd.concat(lvl3_dfs, ignore_index=True)
+    agg_df = pd.concat(lvl4_dfs, ignore_index=True)
+    using_demo_data = False
 
-    for col in ["total_volume_eth", "avg_price_eth", "max_price_eth",
-                "min_price_eth", "transaction_count"]:
-        if col in agg_df.columns:
-            agg_df[col] = pd.to_numeric(agg_df[col], errors="coerce")
+  # ── Clean types ─────────────────────────────────────────────────────────
+  sales_df["price_eth"] = pd.to_numeric(sales_df["price_eth"], errors="coerce")
+  sales_df["timestamp"] = pd.to_datetime(sales_df["timestamp"], errors="coerce")
 
-    return sales_df, agg_df
+  for col in ["total_volume_eth", "avg_price_eth", "max_price_eth",
+              "min_price_eth", "transaction_count"]:
+    if col in agg_df.columns:
+      agg_df[col] = pd.to_numeric(agg_df[col], errors="coerce")
+
+  return sales_df, agg_df, using_demo_data, missing, data_load_errors
 
 
-sales_df, agg_df = load_data()
+sales_df, agg_df, using_demo_data, missing_files, data_load_errors = load_data()
+
+if using_demo_data:
+  msg = (
+    "Real CSV sources are not fully available. Showing demo data. "
+    "Add local CSVs in data/ or set DATA_URL_* variables in .env."
+  )
+  if missing_files:
+    msg += f" Missing files: {', '.join(sorted(set(missing_files)))}."
+  if data_load_errors:
+    msg += " Some URLs could not be loaded."
+  st.warning(msg, icon="⚠️")
 
 # ── Derive all downstream frames from real data ───────────────────────────────
 

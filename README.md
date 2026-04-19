@@ -112,6 +112,20 @@ Per-NFT aggregated metrics:
 
 ## 🔧 Configuration
 
+### Using Google Drive CSV Links (.env)
+
+If you uploaded data to Google Drive, you can run the app/API without copying CSVs into `data/`:
+
+1. Copy `.env.example` to `.env`
+2. Fill `DATA_URL_*` variables with your Google Drive file links
+3. Start the app/API normally
+
+Supported link formats include:
+- `https://drive.google.com/file/d/<FILE_ID>/view?...`
+- `https://drive.google.com/open?id=<FILE_ID>`
+
+The loader automatically converts these to direct-download URLs.
+
 ### Color Palette
 ```python
 CryptoPunks: #534AB7 (Purple)

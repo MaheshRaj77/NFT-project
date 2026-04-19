@@ -20,10 +20,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from functools import lru_cache
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from pathlib import Path
 import pandas as pd
 import numpy as np
 from pydantic import BaseModel
 import json
+import os
+import re
+from urllib.parse import parse_qs, urlparse
 
 from config import settings, validate_api_key
 
@@ -75,6 +79,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+CSV_URL_ENV_MAP = {
+    "Level3_cryptopunks_new.csv": "DATA_URL_LEVEL3_CRYPTOPUNKS",
+    "Level3_bayc_new.csv": "DATA_URL_LEVEL3_BAYC",
+    "Level3_mayc_new.csv": "DATA_URL_LEVEL3_MAYC",
+    "Level3_doodles_new.csv": "DATA_URL_LEVEL3_DOODLES",
+    "Level3_pudgy_penguins_new.csv": "DATA_URL_LEVEL3_PUDGY_PENGUINS",
+    "Level4_cryptopunks_new.csv": "DATA_URL_LEVEL4_CRYPTOPUNKS",
+    "Level4_bayc_new.csv": "DATA_URL_LEVEL4_BAYC",
+    "Level4_mayc_new.csv": "DATA_URL_LEVEL4_MAYC",
+    "Level4_doodles_new.csv": "DATA_URL_LEVEL4_DOODLES",
+    "Level4_pudgypenguins_new.csv": "DATA_URL_LEVEL4_PUDGYPENGUINS",
+}
+
+
+def _gdrive_to_direct_download(url: str) -> str:
+    if not url:
+        return url
+
+    if "drive.google.com" not in url:
+        return url
+
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    file_id = None
+
+    if "id" in qs and qs["id"]:
+        file_id = qs["id"][0]
+    else:
+        match = re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
+        if match:
+            file_id = match.group(1)
+
+    if not file_id:
+        return url
+
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+
+def _resolve_csv_source(filename: str) -> tuple[str, str]:
+    local_path = Path(settings.DATA_PATH) / filename
+    if local_path.exists():
+        return str(local_path), "local"
+
+    env_name = CSV_URL_ENV_MAP.get(filename, "")
+    raw_url = os.getenv(env_name, "").strip() if env_name else ""
+    if not raw_url:
+        raise FileNotFoundError(filename)
+
+    return _gdrive_to_direct_download(raw_url), f"env:{env_name}"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DATA LOADING WITH CACHING
@@ -92,37 +146,83 @@ def load_data() -> tuple:
         - Cold load: ~1-2 seconds
         - Cached: ~0ms (in-memory)
     """
-    try:
-        # Load Level 3 (transaction records)
-        sales_df = pd.concat([
-            pd.read_csv(f"{settings.DATA_PATH}/Level3_cryptopunks_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level3_bayc_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level3_mayc_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level3_doodles_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level3_pudgy_penguins_new.csv"),
-        ], ignore_index=True)
-        
-        # Load Level 4 (aggregated metrics)
-        agg_df = pd.concat([
-            pd.read_csv(f"{settings.DATA_PATH}/Level4_cryptopunks_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level4_bayc_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level4_mayc_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level4_doodles_new.csv"),
-            pd.read_csv(f"{settings.DATA_PATH}/Level4_pudgypenguins_new.csv"),
-        ], ignore_index=True)
-        
-        # Type conversion
-        sales_df['timestamp'] = pd.to_datetime(sales_df['timestamp'], errors='coerce')
-        sales_df['price_eth'] = pd.to_numeric(sales_df['price_eth'], errors='coerce')
-        
-        agg_df['avg_price_eth'] = pd.to_numeric(agg_df['avg_price_eth'], errors='coerce')
-        agg_df['total_volume_eth'] = pd.to_numeric(agg_df['total_volume_eth'], errors='coerce')
-        agg_df['max_price_eth'] = pd.to_numeric(agg_df['max_price_eth'], errors='coerce')
-        agg_df['min_price_eth'] = pd.to_numeric(agg_df['min_price_eth'], errors='coerce')
-        
-        return sales_df, agg_df
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Data loading error: {str(e)}")
+    level3_specs = [
+        ("Level3_cryptopunks_new.csv", "CryptoPunks"),
+        ("Level3_bayc_new.csv", "BAYC"),
+        ("Level3_mayc_new.csv", "MAYC"),
+        ("Level3_doodles_new.csv", "Doodles"),
+        ("Level3_pudgy_penguins_new.csv", "Pudgy Penguins"),
+    ]
+    level4_specs = [
+        ("Level4_cryptopunks_new.csv", "CryptoPunks"),
+        ("Level4_bayc_new.csv", "BAYC"),
+        ("Level4_mayc_new.csv", "MAYC"),
+        ("Level4_doodles_new.csv", "Doodles"),
+        ("Level4_pudgypenguins_new.csv", "Pudgy Penguins"),
+    ]
+
+    missing_files = []
+    load_errors = []
+    sales_frames = []
+    agg_frames = []
+
+    for filename, collection in level3_specs:
+        source_name = "unknown"
+        try:
+            source, source_name = _resolve_csv_source(filename)
+            df = pd.read_csv(source)
+            df["collection"] = collection
+            sales_frames.append(df)
+        except FileNotFoundError:
+            missing_files.append(filename)
+        except Exception as exc:
+            load_errors.append(f"{filename} ({source_name}): {exc}")
+
+    for filename, collection in level4_specs:
+        source_name = "unknown"
+        try:
+            source, source_name = _resolve_csv_source(filename)
+            df = pd.read_csv(source)
+            df["collection"] = collection
+            agg_frames.append(df)
+        except FileNotFoundError:
+            missing_files.append(filename)
+        except Exception as exc:
+            load_errors.append(f"{filename} ({source_name}): {exc}")
+
+    if missing_files or load_errors:
+        missing_hints = []
+        for filename in sorted(set(missing_files)):
+            env_name = CSV_URL_ENV_MAP.get(filename, "DATA_URL_<FILE>")
+            missing_hints.append(
+                f"{filename}: add local file under {settings.DATA_PATH}/ or set {env_name}"
+            )
+
+        details = []
+        if missing_hints:
+            details.append("Missing files -> " + " | ".join(missing_hints))
+        if load_errors:
+            details.append("Load errors -> " + " | ".join(load_errors))
+
+        raise HTTPException(
+            status_code=500,
+            detail="Data loading error. " + " ; ".join(details),
+        )
+
+    sales_df = pd.concat(sales_frames, ignore_index=True)
+    agg_df = pd.concat(agg_frames, ignore_index=True)
+
+    # Type conversion
+    if "timestamp" in sales_df.columns:
+        sales_df["timestamp"] = pd.to_datetime(sales_df["timestamp"], errors="coerce")
+    if "price_eth" in sales_df.columns:
+        sales_df["price_eth"] = pd.to_numeric(sales_df["price_eth"], errors="coerce")
+
+    for col in ["avg_price_eth", "total_volume_eth", "max_price_eth", "min_price_eth"]:
+        if col in agg_df.columns:
+            agg_df[col] = pd.to_numeric(agg_df[col], errors="coerce")
+
+    return sales_df, agg_df
 
 
 def nan_to_none(obj):

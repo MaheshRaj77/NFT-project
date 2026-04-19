@@ -78,6 +78,16 @@ You should see all 4 main packages + ~40 dependencies.
 
 ## ✅ Verification Checks
 
+### Optional: Use Google Drive Links Instead of Local CSV Files
+
+If your CSVs are hosted on Google Drive:
+
+1. Create `.env` from `.env.example`
+2. Fill the `DATA_URL_*` variables with your file links
+3. Run the app/API normally
+
+You can paste regular share links (`/file/d/.../view`); the project converts them to direct-download links automatically.
+
 ### Test Python Imports
 
 ```bash
