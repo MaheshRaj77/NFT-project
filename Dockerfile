@@ -42,7 +42,9 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY api.py config.py ./
-COPY data/ ./data/
+
+# Create data directory for optional local files
+RUN mkdir -p /app/data
 
 # Create .env placeholder
 RUN echo "# Environment variables - set on deployment\n" > .env
